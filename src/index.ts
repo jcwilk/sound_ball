@@ -1,5 +1,6 @@
 import './index.css';
 import { Resizer } from './resizer'
+import { SoundController } from './sound_controller'
 const REGL = require("regl");
 
 const initialGraphX = 0;
@@ -12,24 +13,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // optionalExtensions: ['oes_texture_float_linear'],
     });
 
-    require('getusermedia')({audio: true}, function (err, stream) {
-        if (err) {
-            return
-        }
-
-        const context = new AudioContext()
-        const analyser = context.createAnalyser()
-
-        context.createMediaStreamSource(stream).connect(analyser)
-
-        const fftSize = analyser.frequencyBinCount
-        const frequencies = new Uint8Array(fftSize)
-        // const fftBuffer = regl.buffer({
-        //     length: fftSize,
-        //     type: 'uint8',
-        //     usage: 'dynamic'
-        // })
-
+    SoundController.requestPermissions().then((soundController) => {
         const urlParams = new URLSearchParams(window.location.search);
         let graphX = initialGraphX;
         let graphY = initialGraphY;
@@ -86,28 +70,15 @@ document.addEventListener('DOMContentLoaded', function () {
             const thisTime = performance.now();
 
             // dTime always assumes between 1 and 144 fps
-            const dTime = Math.min(1000, Math.max(1000 / 144, thisTime - lastTime));
+            const dTime = Math.min(1000, Math.max(1000 / 144, thisTime - lastTime)) / 1000.;
 
             lastTime = thisTime;
 
-            analyser.getByteFrequencyData(frequencies);
-
-            const freq = frequencies.reduce((acc, el, index, arr) => {
-                if (el < threshold) return acc;
-                if (arr[acc] > el) return acc;
-                return index;
-            }, -1);
-
-            let freqPercent;
-            if (freq == -1) freqPercent = lastFreqPercent;
-            else freqPercent = lastFreqPercent + 0.1*(freq / 1024. - lastFreqPercent);
-            lastFreqPercent = freqPercent;
-
-            const currentMax = Math.max(...frequencies);
-            threshold = Math.max(threshold, currentMax * 0.6);
-            //console.log(freqPercent);
-            const juliaX = (freqPercent - 0.05)*20. - 0.5;
-            const juliaY = ((currentMax / 255.) - 0.5);
+            soundController.update(dTime)
+            const freqPercent = (soundController.spikeRatio - 0.05)*20. // scaled roughly from 0 to 1
+            const volume = (soundController.currentMax / 255.)
+            const juliaX = Math.cos(freqPercent * Math.PI) * (volume + 0.5);
+            const juliaY = Math.sin(freqPercent * Math.PI) * (volume + 0.5);
 
             //const tempThreshold = currentMax * 0.6;
             //const diff = tempThreshold - threshold;
