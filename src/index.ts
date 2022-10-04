@@ -1,25 +1,98 @@
 import './index.css';
 import { Resizer } from './resizer'
 import { SoundController } from './sound_controller'
+import { Framebuffer2D } from 'regl'
 const REGL = require("regl");
 
 const initialGraphX = 0;
 const initialGraphY = 0;
 const initialZoom = .4;
 
+let dataBuffers: Array<Framebuffer2D>;
+
+const INITIAL_RADIUS = 512;
+const MAX_RADIUS = 4096;
+let orbitsWidth = INITIAL_RADIUS;
+let orbitsHeight = INITIAL_RADIUS;
+
+
+
 document.addEventListener('DOMContentLoaded', function () {
     const regl = REGL({
-        //extensions: ['OES_texture_float'],
+        extensions: ['OES_texture_float'],
         // optionalExtensions: ['oes_texture_float_linear'],
     });
+
+    dataBuffers = (Array(2)).fill(0).map(() =>
+        regl.framebuffer({
+            color: regl.texture({
+                width: orbitsWidth,
+                height: orbitsHeight,
+                wrap: 'repeat',
+
+                // note that firefox and mobile refused to run it with just 'rgb'
+                format: 'rgba', // there's room to add a whole extra channel here wew!
+                type: 'float',
+
+                // These two are nice when there's not a 1:1 between the orbit texture and the render texture.
+                // However, since we're carefully maintaining that ratio these are no longer useful.
+                // mag: 'linear',
+                // min: 'linear'
+            }),
+            depthStencil: false
+        })
+    )
 
     SoundController.requestPermissions().then((soundController) => {
         const urlParams = new URLSearchParams(window.location.search);
         let graphX = initialGraphX;
         let graphY = initialGraphY;
         let graphZoom = initialZoom;
+        let resetBuffer = false;
 
         const resizer = new Resizer(window, 2 / graphZoom);
+
+        const onResize = () => {
+            // these need to be a power of two and should only ever be resized upwards
+            if ((resizer.screenWidth > orbitsWidth && orbitsWidth < MAX_RADIUS) || (resizer.screenHeight > orbitsHeight && orbitsHeight < MAX_RADIUS)) {
+                while (resizer.screenWidth > orbitsWidth && orbitsWidth < MAX_RADIUS) {
+                    orbitsWidth *= 2
+                }
+                while (resizer.screenHeight > orbitsHeight && orbitsHeight < MAX_RADIUS) {
+                    orbitsHeight *= 2
+                }
+
+                dataBuffers[0].resize(orbitsWidth, orbitsHeight);
+                dataBuffers[1].resize(orbitsWidth, orbitsHeight);
+
+                //console.log(`resizing to ${orbitsWidth}x${orbitsHeight}`);
+            }
+
+            resetBuffer = true;
+        }
+        onResize();
+        resizer.onResize = onResize;
+
+        const update = regl({
+            frag: require('./field_generator.glsl'),
+
+            vert: `
+                precision highp float;
+                attribute vec2 position;
+                varying vec2 uv;
+                void main() {
+                    uv = position / 2.;
+                    gl_Position = vec4(position, 0, 1);
+                }
+            `,
+
+            framebuffer: ({ tick }, props) => (props as any).dataBuffers[(tick + 1) % 2],
+
+            uniforms: {
+                prevState: ({ tick }, props) => (props as any).dataBuffers[tick % 2],
+                spikeRatio: (context, props) => (props as any).spikeRatio
+            }
+        })
 
         const draw = regl({
             frag: `
@@ -47,12 +120,16 @@ document.addEventListener('DOMContentLoaded', function () {
             },
 
             uniforms: {
+                prevState: ({ tick }, props) => (props as any).dataBuffers[(tick + 1) % 2],
                 graphWidth: (context, props) => (props as any).graphWidth,
                 graphHeight: (context, props) => (props as any).graphHeight,
                 graphX: (context, props) => (props as any).graphX,
                 graphY: (context, props) => (props as any).graphY,
-                juliaX: (context, props) => (props as any).juliaX,
-                juliaY: (context, props) => (props as any).juliaY,
+                screenWidth: (context, props) => (props as any).screenWidth,
+                screenHeight: (context, props) => (props as any).screenHeight,
+                orbitsWidth: (context, props) => (props as any).orbitsWidth,
+                orbitsHeight: (context, props) => (props as any).orbitsHeight,
+                resetBuffer: (context, props) => (props as any).resetBuffer,
             },
 
             depth: { enable: false },
@@ -77,8 +154,6 @@ document.addEventListener('DOMContentLoaded', function () {
             soundController.update(dTime)
             const freqPercent = (soundController.spikeRatio - 0.05)*20. // scaled roughly from 0 to 1
             const volume = (soundController.currentMax / 255.)
-            const juliaX = Math.cos(freqPercent * Math.PI) * (volume + 0.5);
-            const juliaY = Math.sin(freqPercent * Math.PI) * (volume + 0.5);
 
             //const tempThreshold = currentMax * 0.6;
             //const diff = tempThreshold - threshold;
@@ -102,12 +177,21 @@ document.addEventListener('DOMContentLoaded', function () {
                 graphWidth: resizer.graphWidth,
                 graphHeight: resizer.graphHeight,
                 graphX: graphX,
-                //graphX: freqPercent*12.-0.5,
-                //graphX: Math.max(...frequencies)/255.,
                 graphY: graphY,
-                juliaX: juliaX,
-                juliaY: juliaY
+                dataBuffers: dataBuffers,
+                resetBuffer: resetBuffer,
+                screenWidth: resizer.screenWidth,
+                screenHeight: resizer.screenHeight,
+                orbitsWidth: orbitsWidth,
+                orbitsHeight: orbitsHeight
 
+            }, () => {
+                update({
+                    dataBuffers: dataBuffers,
+                    spikeRatio: soundController.spikeRatio
+                })
+
+                regl.draw()
             })
         })
     })
