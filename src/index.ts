@@ -97,7 +97,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const draw = regl({
             frag: `
                 // override default, see basic_julia.glsl
-                #define MAX_ITERATIONS 120
+                #define MAX_ITERATIONS 50
             ` + require('./basic_julia.glsl'),
 
             vert: `

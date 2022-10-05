@@ -15,7 +15,7 @@ varying vec2 uv;
 #define MAX_ITERATIONS 100
 #endif
 
-const float COLOR_CYCLES = 2.0;
+const float COLOR_CYCLES = 3.;
 // used for scaling iterations into colors
 
 vec2 screenRegion;
@@ -39,20 +39,22 @@ vec2 valAt(vec2 coord) {
     return prev.xy;
 }
 
-int julia(vec2 orbit) {
+float julia(vec2 orbit) {
     vec2 val;
+    float sum = 0.;
 
     for(int i=0; i <= MAX_ITERATIONS; i++) {
+        sum+=length(orbit);
         val = valAt(orbit);
 
         orbit = vec2(
             orbit.x*orbit.x - orbit.y*orbit.y + val.x,
             2.*orbit.x*orbit.y + val.y
         );
-        if (abs(orbit.x) > 2. || abs(orbit.y) > 2.) return i;
+        if (abs(orbit.x) > 2. || abs(orbit.y) > 2.) return sum;
     }
 
-    return -1; // indicate unfinished
+    return sum;
 }
 
 void main() {
@@ -69,15 +71,9 @@ void main() {
     // lower bounds of floats you'll get the edges wobbling back and forth as you zoom because the rounding errors are
     // happening during the plane interpolation step. Keeping the vertex ranging from -0.5 to 0.5 dodges that issue.
     vec2 start = graphXY + uv * graphResolution;
-    int iterations = julia(start);
+    float sum = julia(start);
 
-    // if still alive...
-    if (iterations < 0) {
-        gl_FragColor = vec4(0., 1., 0., 1.);
-        return;
-    }
-
-    float scaled=log(float(iterations))/log(float(MAX_ITERATIONS));
+    float scaled=log(float(sum))/log(float(MAX_ITERATIONS));
     gl_FragColor = vec4(
         hsv2rgb(
             vec3(
