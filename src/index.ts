@@ -20,7 +20,7 @@ let orbitsHeight = INITIAL_RADIUS;
 document.addEventListener('DOMContentLoaded', function () {
     const regl = REGL({
         extensions: ['OES_texture_float'],
-        // optionalExtensions: ['oes_texture_float_linear'],
+        optionalExtensions: ['oes_texture_float_linear'],
     });
 
     dataBuffers = (Array(2)).fill(0).map(() =>
@@ -36,8 +36,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 // These two are nice when there's not a 1:1 between the orbit texture and the render texture.
                 // However, since we're carefully maintaining that ratio these are no longer useful.
-                // mag: 'linear',
-                // min: 'linear'
+                mag: 'linear',
+                min: 'linear'
             }),
             depthStencil: false
         })
