@@ -1,24 +1,36 @@
 precision highp float;
+
+#define SPIKE_SIZE 0.03
+#define MAX_SPIKES 20
+#define SPIN_RADIUS 0.045
+
 uniform sampler2D prevState;
-uniform float spikeRatio;
+uniform vec2 spikes[MAX_SPIKES];
+uniform int spikesCount;
 varying vec2 uv;
-#define radius 0.03
 
 void main() {
-    // TODO - make the js pass in a value that doesn't need to be scaled 200x
     // TODO - start spikeRatio at a more reasonable value so it doesn't spin like crazy at the beginning
-    vec2 offset = vec2(cos(spikeRatio*200.),sin(spikeRatio*200.)) * 0.1;
-    vec2 textureCoord = uv + 0.5; // [0, 1]
-    vec2 diff = uv-offset;
-    float len = length(diff);
 
-    vec2 sourceTextureCoord = uv * 0.99 + 0.5;
+    vec2 sourceTextureCoord = uv * 0.995 + 0.5;
     vec4 source = texture2D(prevState, sourceTextureCoord);
 
-    if (len < radius) {
-        float boost = (radius - len)/radius;
-        boost*=boost*0.3; //influence
-        source+=vec4(vec2(boost),0.,0.);
+    for(int i=0; i < MAX_SPIKES; i++) {
+        if (i >= spikesCount) break;
+
+        vec2 spike = spikes[i];
+        float frequencyRadians = spike.x * 3.1415296 * 2. * 8.;
+        float magnitudeRatio = spike.y;
+
+        vec2 offset = vec2(cos(frequencyRadians),sin(frequencyRadians)) * SPIN_RADIUS;
+        vec2 diff = uv-offset;
+        float len = length(diff);
+
+        if (len < SPIKE_SIZE) {
+            float boost = (SPIKE_SIZE - len)/SPIKE_SIZE;
+            boost*=boost*0.3; //influence
+            source+=vec4(vec2(boost),0.,0.);
+        }
     }
 
     gl_FragColor = source;

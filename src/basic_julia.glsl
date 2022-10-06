@@ -15,7 +15,7 @@ varying vec2 uv;
 #define MAX_ITERATIONS 100
 #endif
 
-const float COLOR_CYCLES = 3.;
+const float COLOR_CYCLES = 2.;
 // used for scaling iterations into colors
 
 vec2 screenRegion;
@@ -44,14 +44,14 @@ float julia(vec2 orbit) {
     float sum = 0.;
 
     for(int i=0; i <= MAX_ITERATIONS; i++) {
-        sum+=length(orbit);
         val = valAt(orbit);
 
         orbit = vec2(
             orbit.x*orbit.x - orbit.y*orbit.y + val.x,
             2.*orbit.x*orbit.y + val.y
         );
-        if (abs(orbit.x) > 2. || abs(orbit.y) > 2.) return sum;
+        if (length(orbit) > 2.) return sum;
+        sum+=length(orbit);
     }
 
     return sum;

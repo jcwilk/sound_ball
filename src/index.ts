@@ -6,7 +6,7 @@ const REGL = require("regl");
 
 const initialGraphX = 0;
 const initialGraphY = 0;
-const initialZoom = .4;
+const initialZoom = .7;
 
 let dataBuffers: Array<Framebuffer2D>;
 
@@ -90,14 +90,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
             uniforms: {
                 prevState: ({ tick }, props) => (props as any).dataBuffers[tick % 2],
-                spikeRatio: (context, props) => (props as any).spikeRatio
+                spikes: (context, props) => ((props as any).spikes.length > 0 ? (props as any).spikes : [0,0]),
+                spikesCount: (context, props) => (props as any).spikes.length / 2
             }
         })
 
         const draw = regl({
             frag: `
                 // override default, see basic_julia.glsl
-                #define MAX_ITERATIONS 50
+                #define MAX_ITERATIONS 10
             ` + require('./basic_julia.glsl'),
 
             vert: `
@@ -188,7 +189,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }, () => {
                 update({
                     dataBuffers: dataBuffers,
-                    spikeRatio: soundController.spikeRatio
+                    spikes: soundController.spikes
                 })
 
                 regl.draw()

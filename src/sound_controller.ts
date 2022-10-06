@@ -1,3 +1,13 @@
+// TODO: calibrate these
+const minEmaDifference = 10
+const lowestIndex = 180
+const highestIndex = 300
+const maxVolume = 255
+const maxSpikes = 20
+const shortInfluence = 0.4
+const longInfluence = 0.1
+const frequenciesInfluence = 10
+
 // EMA smoothing convenience utility
 class EmaSmoother {
   private time: number
@@ -20,14 +30,14 @@ class EmaSmoother {
 }
 
 class SpikeDetector {
-  static consumeArray(array: Array<number>): number {
+  static consumeArray(array: Array<number>): Array<number> {
     const detector = new this
 
     for (let index = 0; index < array.length; index++) {
       detector.consume(array[index], index)
     }
 
-    return detector.spikes.reduce((acc, el) => array[el] > array[acc] ? el : acc, 0)
+    return detector.spikes; //.reduce((acc, el) => array[el] > array[acc] ? el : acc, 0)
   }
 
   spikes: Array<number>
@@ -48,8 +58,8 @@ class SpikeDetector {
     if (this.short < 0) this.short = value
     if (this.long < 0) this.long = value
 
-    this.short = this.smoother.smooth(this.short, value, 0.5)
-    this.long = this.smoother.smooth(this.long, value, 0.1)
+    this.short = this.smoother.smooth(this.short, value, shortInfluence)
+    this.long = this.smoother.smooth(this.long, value, longInfluence)
 
     this.checkTransitions()
 
@@ -62,15 +72,30 @@ class SpikeDetector {
   }
 
   private checkTransitions() {
-    if (!this.spiking && this.short > this.long) {
+    if (!this.spiking && this.short > this.long + minEmaDifference) {
       this.spiking = true
     }
     else if(this.spiking && this.short <= this.long) {
       this.spiking = false
-      this.spikes.push(this.spikeHighestIndex)
+      this.registerSpike()
       this.spikeHighest = 0
       this.spikeHighestIndex = -1
     }
+  }
+
+  private registerSpike() {
+    if (this.spikes.length >= maxSpikes) return
+
+    const index = this.spikeHighestIndex;
+    if (index < lowestIndex || index > highestIndex) return
+
+
+
+    const indexRatio = (index - lowestIndex) / highestIndex
+    const magnitudeRatio = this.spikeHighest / maxVolume
+    this.spikes.push(indexRatio)
+    this.spikes.push(magnitudeRatio)
+    console.log(magnitudeRatio)
   }
 }
 
@@ -89,6 +114,8 @@ export class SoundController {
   }
 
   frequencies: number[]
+  spikes: Array<number> = []
+
   spikeRatio: number = 0.5
   currentMax: number = 0
 
@@ -116,16 +143,16 @@ export class SoundController {
     const smoother = new EmaSmoother(time)
 
     this.analyser.getByteFrequencyData(this.rawFrequencies)
-    smoother.smoothArray(this.frequencies, this.rawFrequencies, 5)
+    smoother.smoothArray(this.frequencies, this.rawFrequencies, frequenciesInfluence)
 
-    const spikeIndex = SpikeDetector.consumeArray(this.frequencies)
+    this.spikes = SpikeDetector.consumeArray(this.frequencies)
     //console.log(spikeIndex)
-    if (spikeIndex > 45 && spikeIndex < 150) {
-      const tempMax = this.frequencies[spikeIndex]
-      this.currentMax = smoother.smooth(this.currentMax, tempMax, 2)
-      if (tempMax > this.currentMax * 0.8) {
-        this.spikeRatio = smoother.smooth(this.spikeRatio, spikeIndex / this.frequencies.length, 2)
-      }
-    }
+    //if (spikeIndex > 45 && spikeIndex < 150) {
+      //const tempMax = this.frequencies[spikeIndex]
+      //this.currentMax = smoother.smooth(this.currentMax, tempMax, 2)
+      //if (tempMax > this.currentMax * 0.8) {
+        //this.spikeRatio = smoother.smooth(this.spikeRatio, spikeIndex / this.frequencies.length, 2)
+      //}
+    //}
   }
 }
